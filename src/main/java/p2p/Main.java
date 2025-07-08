@@ -9,7 +9,7 @@ public class Main {
 
         Peer p2 = new Peer(4000,3000);
         p2.start();
-        Thread.sleep(2000);
+        Thread.sleep(3000);
         p2.sendMessageToAllConnected("hello from p2");
         Thread.sleep(2000);
     }

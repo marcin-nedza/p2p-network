@@ -1,6 +1,8 @@
 package p2p;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -27,14 +29,14 @@ public class FileServer {
         });
 
         executor.submit(() -> {
-            while(true){
-               try {
-                RPC rpc=queue.take();
-                handleMessage(rpc);
-               } catch (InterruptedException e) {
-                  Thread.currentThread().interrupt();
-                  break;
-               }
+            while (true) {
+                try {
+                    RPC rpc = queue.take();
+                    handleMessage(rpc);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
 
         });
@@ -46,12 +48,12 @@ public class FileServer {
             if (parts.length != 2) continue;
             String host = parts[0];
             int port = Integer.parseInt(parts[1]);
-            Client.connectTo(host, port,opts.getPeerId());
+            Client.connectTo(host, port, opts.getPeerId(),this);
         }
 
     }
 
-    public void onPeer(String peerId,Socket socket) {
+    public void onPeer(String peerId, Socket socket) {
         peers.put(peerId, socket);
         System.out.println("Peer added:" + peerId);
     }
@@ -64,6 +66,7 @@ public class FileServer {
     }
 
     public void broadcast(String msg) {
+        System.out.println("Broadcasting to peers: "+peers.keySet());
         for (Map.Entry<String, Socket> entry : peers.entrySet()) {
             try {
                 Socket socket = entry.getValue();
@@ -77,4 +80,8 @@ public class FileServer {
 
     }
 
+    public void registerOutgoingPeer(String peerId,Socket socket){
+        peers.put(peerId,socket);
+        System.out.println("Outgoing peer added: "+peerId);
+    }
 }
