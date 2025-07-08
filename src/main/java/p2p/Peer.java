@@ -4,37 +4,38 @@ import java.util.List;
 
 public class Peer {
     private final int listeningPort;
-    private final int connectPort;
     private final String peerId;
     private final FileServer fileServer;
 
-    public Peer(int listeningPort, int connectPort) {
+    public Peer(int listeningPort) {
         this.listeningPort = listeningPort;
-        this.connectPort = connectPort;
-        this.peerId="peer-"+listeningPort;
+        this.peerId = String.valueOf(listeningPort);
 
         FileServerOpts opts = new FileServerOpts.Builder()
                 .listenPort(listeningPort)
-                .bootstrapNodes(connectPort > 0 ? List.of("localhost:" + connectPort) : List.of())
                 .peerId(peerId)
                 .build();
         this.fileServer = new FileServer(opts);
     }
 
+    public int getListeningPort() {
+        return listeningPort;
+    }
+
+    public String getPeerId() {
+        return peerId;
+    }
+
+    public void bootstrapNodes(List<String> nodes) {
+        fileServer.bootstrapNetwork(nodes);
+    }
+
     public void start() {
         fileServer.start();
-
-        if (connectPort > 0) {
-            try {
-                Thread.sleep(1000);
-                fileServer.bootstrapNetwork();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
     }
-    public void sendMessageToAllConnected(String  msg){
+
+    public void sendMessageToAllConnected(String msg) {
         fileServer.broadcast(msg);
     }
+
 }

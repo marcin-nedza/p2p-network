@@ -1,11 +1,10 @@
 package p2p;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -13,7 +12,7 @@ public class FileServer {
     private final FileServerOpts opts;
     private final BlockingQueue<RPC> queue = new LinkedBlockingQueue<>();
     private final Map<String, Socket> peers = new ConcurrentHashMap<>();
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private static final ExecutorService executor = Executors.newCachedThreadPool();
 
     public FileServer(FileServerOpts opts) {
         this.opts = opts;
@@ -22,7 +21,7 @@ public class FileServer {
     public void start() {
         executor.submit(() -> {
             try {
-                TCPServer.start(queue, opts.getListenPort(), this::onPeer);
+                TCPServer.start(queue, opts.getListenPort(), this::onPeer, this::onPeerDisconnected);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -42,15 +41,14 @@ public class FileServer {
         });
     }
 
-    public void bootstrapNetwork() {
-        for (String hostPort : opts.getBootstrapNodes()) {
+    public void bootstrapNetwork(List<String> nodes) {
+        for (String hostPort : nodes) {
             String[] parts = hostPort.split(":");
             if (parts.length != 2) continue;
             String host = parts[0];
             int port = Integer.parseInt(parts[1]);
-            Client.connectTo(host, port, opts.getPeerId(),this);
+            Client.connectTo(host, port, opts.getPeerId(), this);
         }
-
     }
 
     public void onPeer(String peerId, Socket socket) {
@@ -58,15 +56,21 @@ public class FileServer {
         System.out.println("Peer added:" + peerId);
     }
 
+    public void onPeerDisconnected(String peerId) {
+        peers.remove(peerId);
+        System.out.println("Peer added:" + peerId);
+        System.out.println(peers);
+    }
+
     public void handleMessage(RPC rpc) {
         String from = rpc.getFrom();
         String msg = new String(rpc.getPayload(), StandardCharsets.UTF_8);
-        System.out.println("Received from : " + from + " message : " + msg);
+        System.out.println("[" + opts.getPeerId() + "]" + " Received from : " + from + " message : " + msg);
 
     }
 
     public void broadcast(String msg) {
-        System.out.println("Broadcasting to peers: "+peers.keySet());
+        System.out.println("Broadcasting to peers: " + peers.keySet());
         for (Map.Entry<String, Socket> entry : peers.entrySet()) {
             try {
                 Socket socket = entry.getValue();
@@ -80,8 +84,20 @@ public class FileServer {
 
     }
 
-    public void registerOutgoingPeer(String peerId,Socket socket){
-        peers.put(peerId,socket);
-        System.out.println("Outgoing peer added: "+peerId);
+    public void registerOutgoingPeer(String peerId, Socket socket) {
+        peers.put(peerId, socket);
+        System.out.println("Outgoing peer added: " + peerId);
+    }
+
+    public static void shutdown() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

@@ -5,43 +5,64 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class Client {
-    public static void connectTo(String host, int port,String peerId,FileServer fileServer) {
-        new Thread(() -> {
-            try (Socket socket = new Socket(host, port);
-                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                 Scanner scanner = new Scanner(System.in)) {
+    private static final ExecutorService executor = Executors.newCachedThreadPool();
 
-                System.out.println("Connected to server");
-
-                out.println(peerId);
-                System.out.println("Handshake sent with peerId: " + peerId);
-                fileServer.registerOutgoingPeer("peer-"+peerId,socket);
-
-                new Thread(() -> {
-                    String line;
-                    try {
-                        while ((line = in.readLine()) != null) {
-                            System.out.println("Peer: "+peerId+" received: " + line);
-                        }
-                    } catch (IOException e) {
-                        System.err.println("Error reading from  server: " + e.getMessage());
-                    }
-                }).start();
-                while (true) {
-                    String input = scanner.nextLine();
-                    if ("exit".equalsIgnoreCase(input)) break;
-                    out.println(input);
+    private static void startReader(Socket socket, String peerId) {
+        executor.submit(() -> {
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+                String line;
+                while ((line = in.readLine()) != null) {
+                    System.out.println("Peer: " + peerId + " received: " + line);
                 }
-            } catch (UnknownHostException e) {
-                System.err.println("No host found");
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Error reading from server: " + e.getMessage());
             }
-        }).start();
+        });
+    }
+
+    private static void handleConnection(String host, int port, String peerId, FileServer fileServer) {
+        try (Socket socket = new Socket(host, port);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             Scanner scanner = new Scanner(System.in)) {
+
+            System.out.println("Connected to server");
+
+            out.println(peerId);
+            System.out.println("Handshake sent with peerId: " + peerId);
+            fileServer.registerOutgoingPeer("peer-" + peerId, socket);
+
+            startReader(socket, peerId);
+
+            while (true) {
+                String input = scanner.nextLine();
+                if ("exit".equalsIgnoreCase(input)) break;
+                out.println(input);
+            }
+
+        } catch (IOException e) {
+            System.err.println("Connection error: " + e.getMessage());
+        }
+    }
+
+    public static void connectTo(String host, int port, String peerId, FileServer fileServer) {
+        executor.submit(() -> handleConnection(host, port, peerId, fileServer));
+    }
+
+    public static void shutdown() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }
