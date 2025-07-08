@@ -16,6 +16,7 @@ public class Client {
                  BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                  Scanner scanner = new Scanner(System.in)) {
 
+                out.println(peerId);
                 System.out.println("Connected to server");
 
                 out.println(peerId);
