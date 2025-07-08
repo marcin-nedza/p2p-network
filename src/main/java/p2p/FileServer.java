@@ -64,24 +64,53 @@ public class FileServer {
 
     public void handleMessage(RPC rpc) {
         String from = rpc.getFrom();
-        String msg = new String(rpc.getPayload(), StandardCharsets.UTF_8);
-        System.out.println("[" + opts.getPeerId() + "]" + " Received from : " + from + " message : " + msg);
+        byte[] payload = rpc.getPayload();
+        if (payload.length == 0) return;
+
+        MessageType type = MessageType.fromCode(payload[0]);
+        System.out.println(type);
+
+        String msg = new String(payload, 1, payload.length - 1, StandardCharsets.UTF_8);
+
+        switch (type) {
+            case NORMAL_MESSAGE:
+                System.out.println("Normal mesage");
+                System.out.println("[" + opts.getPeerId() + "] Received from : " + from + " message : " + msg);
+                break;
+            case DISCOVERY_REQUEST:
+                System.out.println("Discovery req");
+                break;
+            case DISCOVERY_RESPONSE:
+                System.out.println("Discovery res");
+                break;
+        }
+    }
+
+    public void sendTo(String peerId, MessageType type, String msg) {
+        Socket socket = peers.get(peerId);
+        if (socket != null) {
+            try {
+                OutputStream out = socket.getOutputStream();
+                byte[] payload = msg.getBytes(StandardCharsets.UTF_8);
+                byte[] full = new byte[1 + payload.length];
+                full[0] = type.getCode();
+                System.arraycopy(payload, 0, full, 1, payload.length);
+                out.write(full);
+                out.write('\n');
+                out.flush();
+            } catch (IOException e) {
+                System.err.println("Failed to send to peer: " + peerId + " : " + e.getMessage());
+            }
+        }
 
     }
 
     public void broadcast(String msg) {
         System.out.println("Broadcasting to peers: " + peers.keySet());
-        for (Map.Entry<String, Socket> entry : peers.entrySet()) {
-            try {
-                Socket socket = entry.getValue();
-                OutputStream out = socket.getOutputStream();
-                out.write((msg + "\n").getBytes(StandardCharsets.UTF_8));
-                out.flush();
-            } catch (IOException e) {
-                System.err.println("Failed to sent to peer: " + entry.getKey() + " :" + e.getMessage());
-            }
+        System.out.println(peers);
+        for (String peerId :peers.keySet() ) {
+           sendTo(peerId,MessageType.NORMAL_MESSAGE,msg);
         }
-
     }
 
     public void registerOutgoingPeer(String peerId, Socket socket) {
