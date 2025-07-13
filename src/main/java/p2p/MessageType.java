@@ -3,7 +3,9 @@ package p2p;
 public enum MessageType {
     DISCOVERY_REQUEST((byte) 0),
     DISCOVERY_RESPONSE((byte) 1),
-    NORMAL_MESSAGE((byte) 2);
+    NORMAL_MESSAGE((byte) 2),
+    PING((byte)3),
+    PONG((byte)4);
 
     private final byte code;
 

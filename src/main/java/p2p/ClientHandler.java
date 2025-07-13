@@ -2,8 +2,10 @@ package p2p;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -24,8 +26,11 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
         String peerId = null;
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
-            peerId = in.readLine();
+        try (
+                InputStream input = socket.getInputStream();
+                BufferedReader handshakeReader = new BufferedReader(new InputStreamReader(input))
+        ) {
+            peerId = handshakeReader.readLine();
             if (peerId == null || peerId.isEmpty()) {
                 System.err.println("Handshake failed: no peerId sent.");
                 socket.close();
@@ -35,15 +40,28 @@ public class ClientHandler implements Runnable {
             System.out.println("Handshake received: peerId= " + peerId);
             onPeerConnected.accept(peerId, socket);
 
-            String line;
-            while ((line = in.readLine()) != null) {
-                if ("exit".equals(line)) {
-                    System.out.println("Client disconnected: " + peerId);
-                    break;
-                }
-                RPC rpc = new RPC(peerId, line.getBytes(), false);
+            while (true) {
+                int typeByte = input.read();
+                if (typeByte == -1) break;
+
+                byte[] lengthBytes = input.readNBytes(4);
+                if (lengthBytes.length < 4) break;
+
+                int length = ByteBuffer.wrap(lengthBytes).getInt();
+
+                byte[] msgBytes = input.readNBytes(length);
+                if (msgBytes.length < length) break;
+
+                byte[] payload = new byte[1 + 4 + msgBytes.length];
+                payload[0] = (byte) typeByte;
+                System.arraycopy(lengthBytes, 0, payload, 1, 4);
+                System.arraycopy(msgBytes, 0, payload, 5, msgBytes.length);
+                RPC rpc = new RPC(peerId, payload, true);
                 queue.put(rpc);
+
+//
             }
+            String line;
         } catch (IOException | InterruptedException e) {
             System.err.println("Client error: " + e.getMessage());
         } finally {

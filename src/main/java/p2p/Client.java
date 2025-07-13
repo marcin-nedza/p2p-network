@@ -1,10 +1,9 @@
 package p2p;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -15,11 +14,24 @@ public class Client {
 
     private static void startReader(Socket socket, String peerId) {
         executor.submit(() -> {
-            try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
-                String line;
-                while ((line = in.readLine()) != null) {
-                    System.out.println("Peer: " + peerId + " received: " + line);
+            try (InputStream in = socket.getInputStream()) {
+                while (true) {
+                    int typeByte = in.read();
+                    if (typeByte == -1) break;//end of stream
+
+                    byte[] lengthBytes = in.readNBytes(4);
+                    if (lengthBytes.length < 4) break;//stream closed or incomplete?
+
+                    int length = ByteBuffer.wrap(lengthBytes).getInt();
+                    byte[] msgBytes = in.readNBytes(length);
+                    if (msgBytes.length < length) break;
+
+                    String msg = new String(msgBytes, StandardCharsets.UTF_8);
+                    MessageType type = MessageType.fromCode((byte) typeByte);
+                    System.out.println("Peer: " + peerId + " received type: " + type + " message: " + msg);
                 }
+
+
             } catch (IOException e) {
                 System.err.println("Error reading from server: " + e.getMessage());
             }
@@ -35,7 +47,7 @@ public class Client {
 
             out.println(peerId);
             System.out.println("Handshake sent with peerId: " + peerId);
-            fileServer.registerOutgoingPeer("peer-" + peerId, socket);
+            fileServer.registerOutgoingPeer(peerId, socket);
 
             startReader(socket, peerId);
 
