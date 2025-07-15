@@ -1,9 +1,7 @@
 package p2p;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
@@ -11,12 +9,14 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class ClientHandler implements Runnable {
+    private final FileServer fileServer;
     private final Socket socket;
     private final BlockingQueue<RPC> queue;
     private final BiConsumer<String, Socket> onPeerConnected;
     private final Consumer<String> onPeerDisconnected;
 
-    public ClientHandler(Socket socket, BlockingQueue<RPC> queue, BiConsumer<String, Socket> onPeerConnected, Consumer<String> onPeerDisconnected) {
+    public ClientHandler(FileServer fileServer, Socket socket, BlockingQueue<RPC> queue, BiConsumer<String, Socket> onPeerConnected, Consumer<String> onPeerDisconnected) {
+        this.fileServer = fileServer;
         this.socket = socket;
         this.queue = queue;
         this.onPeerConnected = onPeerConnected;
@@ -40,6 +40,9 @@ public class ClientHandler implements Runnable {
             System.out.println("Handshake received: peerId= " + peerId);
             onPeerConnected.accept(peerId, socket);
 
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+            System.out.println("\t PEERS" + fileServer.getPeers());
+            out.println(fileServer.getOpts().getPeerId());
             while (true) {
                 int typeByte = input.read();
                 if (typeByte == -1) break;
@@ -58,10 +61,7 @@ public class ClientHandler implements Runnable {
                 System.arraycopy(msgBytes, 0, payload, 5, msgBytes.length);
                 RPC rpc = new RPC(peerId, payload, true);
                 queue.put(rpc);
-
-//
             }
-            String line;
         } catch (IOException | InterruptedException e) {
             System.err.println("Client error: " + e.getMessage());
         } finally {

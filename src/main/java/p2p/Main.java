@@ -5,26 +5,6 @@ import java.util.List;
 
 public class Main {
     public static void main(String[] args) throws IOException, InterruptedException {
-//        Peer p1 = new Peer(3000);
-//        p1.start();
-//
-//        Peer p2 = new Peer(4000);
-//        p2.start();
-//        p2.bootstrapNodes(List.of("localhost:3000"));
-//
-//        Peer p3 = new Peer(4001);
-//        p3.start();
-//        p3.bootstrapNodes(List.of("localhost:3000","localhost:4000"));
-//
-//        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-//            Client.shutdown();
-//            FileServer.shutdown();
-//        }));
-//
-//
-//        Thread.sleep(3000);
-//        p2.sendMessageToAllConnected("hello from p2");
-//        Thread.sleep(Long.MAX_VALUE);
         if (args.length < 1) {
             System.err.println("Usage: java p2p.Main <listeningPort> [bootstrapNodes...]");
             System.exit(1);
@@ -41,15 +21,17 @@ public class Main {
         }
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutting down...");
             Client.shutdown();
-            FileServer.shutdown();
+            peer.shutdown();
+            TCPServer.shutdown();
         }));
 
         // Just as in your example, send a test message after 3 seconds
-        Thread.sleep(3000);
-        if (port == 4000) { // example: only peer 4000 sends the message
-            peer.sendMessageToAllConnected("hello from " + port);
-        }
+//        Thread.sleep(3000);
+//        if (port == 4000) { // example: only peer 4000 sends the message
+//            peer.sendMessageToAllConnected("hello from " + port);
+//        }
 
         // Keep the program running
         Thread.sleep(Long.MAX_VALUE);

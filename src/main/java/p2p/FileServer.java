@@ -2,6 +2,7 @@ package p2p;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -11,7 +12,9 @@ import java.util.concurrent.*;
 
 public class FileServer {
     private final FileServerOpts opts;
+    private ServerSocket serverSocket;
     private final BlockingQueue<RPC> queue = new LinkedBlockingQueue<>();
+
     private final Map<String, Socket> peers = new ConcurrentHashMap<>();
     private static final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -19,11 +22,30 @@ public class FileServer {
         this.opts = opts;
     }
 
+    public BlockingQueue<RPC> getQueue() {
+        return queue;
+    }
+
+    public FileServerOpts getOpts() {
+        return opts;
+    }
+
+    public Map<String, Socket> getPeers() {
+        return peers;
+    }
+
+
+    public ServerSocket getServerSocket() {
+        return serverSocket;
+    }
+
     public void start() {
         ScheduledExecutorService pingScheduler = Executors.newSingleThreadScheduledExecutor();
+
         executor.submit(() -> {
             try {
-                TCPServer.start(queue, opts.getListenPort(), this::onPeer, this::onPeerDisconnected);
+                serverSocket = TCPServer.startServer(opts.getListenPort());
+                TCPServer.acceptLoop(serverSocket, queue, this, this::onPeer, this::onPeerDisconnected);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -41,6 +63,7 @@ public class FileServer {
             }
         });
         pingScheduler.scheduleAtFixedRate(() -> {
+            System.out.println("PING PEERS " + peers);
             for (String peerId : peers.keySet()) {
                 sendTo(peerId, MessageType.PING, "");
             }
@@ -57,28 +80,37 @@ public class FileServer {
             Client.connectTo(host, port, opts.getPeerId(), this);
         }
         executor.submit(() -> {
-
             try {
-                Thread.sleep(500);
+                Thread.sleep(4300);
                 for (String peerId : peers.keySet()) {
-                    sendTo(peerId, MessageType.DISCOVERY_REQUEST, "");
+                    sendTo(peerId, MessageType.DISCOVERY_REQUEST, "Discovery request");
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-
         });
     }
 
     public void onPeer(String peerId, Socket socket) {
         peers.put(peerId, socket);
         System.out.println("Peer added:" + peerId);
+
+        String newPeerInfo = socket.getInetAddress().getHostAddress() + ":" + socket.getPort();
+        for (String existingPeerId : peers.keySet()) {
+            if (!existingPeerId.equals(peerId)) {
+                sendTo(existingPeerId, MessageType.NEW_PEER_ANNOUNCEMENT, newPeerInfo);
+            }
+
+        }
+
+        sendTo(peerId, MessageType.DISCOVERY_REQUEST, "");
+
         printPeersState("onPeer");
     }
 
     public void onPeerDisconnected(String peerId) {
         peers.remove(peerId);
-        System.out.println("Peer added:" + peerId);
+        System.out.println("Peer removed:" + peerId);
         printPeersState("onPeerDisconnects");
     }
 
@@ -92,26 +124,42 @@ public class FileServer {
 
         switch (type) {
             case NORMAL_MESSAGE:
-                System.out.println("Normal mesage");
                 System.out.println("[" + opts.getPeerId() + "] Received from : " + from + " message : " + msg);
                 break;
             case DISCOVERY_REQUEST:
                 System.out.println("[" + opts.getPeerId() + "] Discovery request received from " + from);
                 String peerList = getPeerHostStringExcept(from);
-                System.out.println("PPPPPPP" + peerList);
                 sendTo(from, MessageType.DISCOVERY_RESPONSE, peerList);
-
                 break;
             case DISCOVERY_RESPONSE:
-                System.out.println("Discovery res");
+                System.out.println("[" + opts.getPeerId() + "] Discovery response received from " + from);
+                parseHosts(msg.split(","));
+                break;
+            case NEW_PEER_ANNOUNCEMENT:
+                System.out.println("[" + opts.getPeerId() + "] New peer announcement from " + from + ": " + msg);
+                String[] parts = msg.split(":");
+                if (parts.length != 2) break;
+                String ip = parts[0];
+                String announcedPeerId = parts[1];
+                boolean known = peers.containsKey(announcedPeerId.trim());
+                if (!known) {
+                    System.out.println("Discovered new peer from announcement: " + announcedPeerId + " at " + ip);
+                    try {
+                        int port = Integer.parseInt(announcedPeerId);
+                        Client.connectTo(ip, port, opts.getPeerId(), this);
+                    } catch (NumberFormatException e) {
+                        System.err.println("Invalid peerId  as port: " + e.getMessage());
+                    }
+                }
                 break;
             case PING:
                 System.out.println("[" + opts.getPeerId() + "] Ping received from " + from);
                 sendTo(from, MessageType.PONG, "");
                 break;
-
             case PONG:
                 System.out.println("[" + opts.getPeerId() + "] Pong received from " + from);
+
+                printPeersState("----PONG");
                 break;
         }
     }
@@ -145,7 +193,7 @@ public class FileServer {
 
     public void broadcast(String msg) {
         System.out.println("Broadcasting to peers: " + peers.keySet());
-        System.out.println(peers);
+        System.out.println("FileServer Peers" + peers);
         for (String peerId : peers.keySet()) {
             sendTo(peerId, MessageType.NORMAL_MESSAGE, msg);
         }
@@ -157,7 +205,7 @@ public class FileServer {
         printPeersState("registerOutgoingPeer");
     }
 
-    public static void shutdown() {
+    public void shutdown() {
         executor.shutdown();
         try {
             if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -167,9 +215,32 @@ public class FileServer {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
+
+        System.out.println("Shutting down FileServer...");
+
+        // Close all peer sockets
+        for (Socket socket : peers.values()) {
+            try {
+                if (!socket.isClosed()) {
+                    socket.close();
+                }
+            } catch (IOException e) {
+                System.err.println("Failed to close socket: " + e.getMessage());
+            }
+        }
+
+        // Close the server socket
+        if (serverSocket != null && !serverSocket.isClosed()) {
+            try {
+                serverSocket.close();
+            } catch (IOException e) {
+                System.err.println("Failed to close server socket: " + e.getMessage());
+            }
+        }
     }
 
     private String getPeerHostStringExcept(String excludePeerId) {
+        System.out.println("Excluded " + excludePeerId);
         return peers.entrySet().stream()
                 .filter(p -> !p.getKey().equals(excludePeerId))
                 .map(entry -> {
@@ -182,20 +253,25 @@ public class FileServer {
                 .replaceAll("[\\[\\] ]", "");
     }
 
-    private List<String> getPeerHost() {
-        return peers
-                .entrySet()
-                .stream()
-                .map(entry -> {
-                    Socket s = entry.getValue();
-                    return s.getInetAddress().getHostAddress() + ":" + entry.getKey();
-                })
-                .toList();
-    }
 
     private boolean hasPeer(String hostPort) {
-        return peers.values().stream()
-                .anyMatch(socket -> (socket.getInetAddress().getHostAddress() + ":" + socket.getPort()).equals(hostPort));
+        return peers.entrySet().stream()
+                .map(entry -> entry.getValue().getInetAddress().getHostAddress() + ":" + entry.getKey())
+                .anyMatch(key -> key.equals(hostPort));
+    }
+
+    private void parseHosts(String[] hosts) {
+        for (String hostPort : hosts) {
+            String[] parts = hostPort.split(":");
+            String host = parts[0];
+            int port = Integer.parseInt(parts[1]);
+            String peerId = parts[1];
+            if (!hasPeer(hostPort)) {
+                System.out.println("Discovered new peer " + hostPort);
+                Client.connectTo(host, port, opts.getPeerId(), this);
+            }
+        }
+
     }
 
     private void printPeersState(String context) {

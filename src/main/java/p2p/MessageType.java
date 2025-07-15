@@ -5,7 +5,8 @@ public enum MessageType {
     DISCOVERY_RESPONSE((byte) 1),
     NORMAL_MESSAGE((byte) 2),
     PING((byte)3),
-    PONG((byte)4);
+    PONG((byte)4),
+    NEW_PEER_ANNOUNCEMENT((byte)5);
 
     private final byte code;
 

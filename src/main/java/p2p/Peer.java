@@ -34,6 +34,9 @@ public class Peer {
         fileServer.start();
     }
 
+    public void shutdown(){
+       fileServer.shutdown();
+    }
     public void sendMessageToAllConnected(String msg) {
         fileServer.broadcast(msg);
     }
