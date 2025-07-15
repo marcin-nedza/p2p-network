@@ -31,4 +31,4 @@ run-peers:
 	sleep 1; \
 #	$(TERMINAL) -e sh -c "$(JAVA) -cp $(BIN) p2p.Main 4001 localhost:3000; echo 'Press ENTER to exit...'; read"
 run-one:
-	$(TERMINAL) -e sh -c "$(JAVA) -cp $(BIN) p2p.Main 4000 localhost:3000; echo 'Press ENTER to exit...'; read" &
+	$(TERMINAL) -e sh -c "$(JAVA) -cp $(BIN) p2p.Main 4005 localhost:3000; echo 'Press ENTER to exit...'; read" &

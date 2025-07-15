@@ -1,5 +1,9 @@
 package p2p;
 
+import p2p.client.Client;
+import p2p.common.Peer;
+import p2p.server.TCPServer;
+
 import java.io.IOException;
 import java.util.List;
 

@@ -1,4 +1,7 @@
-package p2p;
+package p2p.common;
+
+import p2p.server.FileServer;
+import p2p.server.FileServerOpts;
 
 import java.util.List;
 

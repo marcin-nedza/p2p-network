@@ -1,4 +1,4 @@
-package p2p;
+package p2p.common;
 
 public enum MessageType {
     DISCOVERY_REQUEST((byte) 0),

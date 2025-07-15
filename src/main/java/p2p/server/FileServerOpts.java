@@ -1,4 +1,4 @@
-package p2p;
+package p2p.server;
 
 public class FileServerOpts {
     private final int listenPort;

@@ -1,4 +1,6 @@
-package p2p;
+package p2p.client;
+
+import p2p.server.FileServer;
 
 import java.io.BufferedReader;
 import java.io.IOException;

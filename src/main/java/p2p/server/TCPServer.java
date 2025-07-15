@@ -1,4 +1,7 @@
-package p2p;
+package p2p.server;
+
+import p2p.common.PeerMessage;
+import p2p.client.ClientHandler;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -20,7 +23,7 @@ public class TCPServer {
     }
 
     public static void acceptLoop(ServerSocket serverSocket,
-                                  BlockingQueue<RPC> queue,
+                                  BlockingQueue<PeerMessage> queue,
                                   FileServer fileServer,
                                   BiConsumer<String, Socket> onPeerConnected,
                                   Consumer<String> onPeerDisconnected) {
