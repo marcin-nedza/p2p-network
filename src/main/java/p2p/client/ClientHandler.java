@@ -2,25 +2,25 @@ package p2p.client;
 
 import p2p.server.FileServer;
 import p2p.common.PeerMessage;
+import p2p.transport.core.TransportConnection;
 import p2p.utils.DecodedMessage;
 import p2p.utils.MessageUtils;
 
 import java.io.*;
-import java.net.Socket;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class ClientHandler implements Runnable {
     private final FileServer fileServer;
-    private final Socket socket;
+    private final TransportConnection  connection;
     private final BlockingQueue<PeerMessage> queue;
-    private final BiConsumer<String, Socket> onPeerConnected;
+    private final BiConsumer<String, TransportConnection> onPeerConnected;
     private final Consumer<String> onPeerDisconnected;
 
-    public ClientHandler(FileServer fileServer, Socket socket, BlockingQueue<PeerMessage> queue, BiConsumer<String, Socket> onPeerConnected, Consumer<String> onPeerDisconnected) {
+    public ClientHandler(FileServer fileServer, TransportConnection connection, BlockingQueue<PeerMessage> queue, BiConsumer<String, TransportConnection> onPeerConnected, Consumer<String> onPeerDisconnected) {
         this.fileServer = fileServer;
-        this.socket = socket;
+        this.connection = connection;
         this.queue = queue;
         this.onPeerConnected = onPeerConnected;
         this.onPeerDisconnected = onPeerDisconnected;
@@ -30,19 +30,19 @@ public class ClientHandler implements Runnable {
     public void run() {
         String peerId = null;
         try (
-                InputStream input = socket.getInputStream();
-                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+                InputStream input = connection.getInputStream();
+                PrintWriter out = new PrintWriter(connection.getOutputStream(), true);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(input))
         ) {
             peerId = reader.readLine();
             if (peerId == null || peerId.isEmpty()) {
                 System.err.println("Handshake failed: no peerId sent.");
-                socket.close();
+                connection.close();
                 return;
             }
 
             System.out.println("Handshake received: peerId= " + peerId);
-            onPeerConnected.accept(peerId, socket);
+            onPeerConnected.accept(peerId, connection);
 
             out.println(fileServer.getOpts().getPeerId());
 
@@ -66,7 +66,7 @@ public class ClientHandler implements Runnable {
             System.out.println("Cleaned up peer: " + peerId);
         }
         try {
-            socket.close();
+            connection.close();
         } catch (IOException e) {
             System.err.println("Error closing socket: " + e.getMessage());
         }

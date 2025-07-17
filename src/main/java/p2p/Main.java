@@ -28,14 +28,8 @@ public class Main {
             System.out.println("Shutting down...");
             Client.shutdown();
             peer.shutdown();
-            TCPServer.shutdown();
+//            TCPServer.shutdown();
         }));
-
-        // Just as in your example, send a test message after 3 seconds
-//        Thread.sleep(3000);
-//        if (port == 4000) { // example: only peer 4000 sends the message
-//            peer.sendMessageToAllConnected("hello from " + port);
-//        }
 
         // Keep the program running
         Thread.sleep(Long.MAX_VALUE);

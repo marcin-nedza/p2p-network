@@ -2,6 +2,7 @@ package p2p.common;
 
 import p2p.server.FileServer;
 import p2p.server.FileServerOpts;
+import p2p.transport.tcp.TCPTransport;
 
 import java.util.List;
 
@@ -17,8 +18,13 @@ public class Peer {
         FileServerOpts opts = new FileServerOpts.Builder()
                 .listenPort(listeningPort)
                 .peerId(peerId)
+                .transport(new TCPTransport())
                 .build();
         this.fileServer = new FileServer(opts);
+    }
+
+    public FileServer getFileServer() {
+        return fileServer;
     }
 
     public int getListeningPort() {
@@ -37,9 +43,10 @@ public class Peer {
         fileServer.start();
     }
 
-    public void shutdown(){
-       fileServer.shutdown();
+    public void shutdown() {
+        fileServer.shutdown();
     }
+
     public void sendMessageToAllConnected(String msg) {
         fileServer.broadcast(msg);
     }

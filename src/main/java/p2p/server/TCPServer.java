@@ -2,10 +2,10 @@ package p2p.server;
 
 import p2p.common.PeerMessage;
 import p2p.client.ClientHandler;
+import p2p.transport.core.Transport;
+import p2p.transport.core.TransportConnection;
 
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,30 +14,30 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 public class TCPServer {
-    public static final ExecutorService executor = Executors.newCachedThreadPool();
+    private final Transport transport;
+    private final ExecutorService executor = Executors.newCachedThreadPool();
 
-    public static ServerSocket startServer(int port) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(port);
-        System.out.println("Server is listening on port: " + port);
-        return serverSocket;
+    public TCPServer(Transport transport) {
+        this.transport = transport;
     }
 
-    public static void acceptLoop(ServerSocket serverSocket,
-                                  BlockingQueue<PeerMessage> queue,
-                                  FileServer fileServer,
-                                  BiConsumer<String, Socket> onPeerConnected,
-                                  Consumer<String> onPeerDisconnected) {
-        while (!serverSocket.isClosed()) {
+    public void acceptLoop(int port,
+                           BlockingQueue<PeerMessage> queue,
+                           FileServer fileServer,
+                           BiConsumer<String, TransportConnection> onPeerConnected,
+                           Consumer<String> onPeerDisconnected) throws IOException {
+        transport.bind(port);
+        while (transport.isConnected() && !Thread.currentThread().isInterrupted()) {
             try {
-                Socket clientSocket = serverSocket.accept();
-                executor.submit(new ClientHandler(fileServer,clientSocket, queue, onPeerConnected, onPeerDisconnected));
+                TransportConnection connection = transport.accept();
+                executor.submit(new ClientHandler(fileServer, connection, queue, onPeerConnected, onPeerDisconnected));
             } catch (IOException e) {
                 System.err.println("Failed to accept connection: " + e.getMessage());
             }
         }
     }
 
-    public static void shutdown() {
+    public  void shutdown() throws IOException {
         executor.shutdown();
         try {
             if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
@@ -47,5 +47,6 @@ public class TCPServer {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
+        transport.close();
     }
 }
